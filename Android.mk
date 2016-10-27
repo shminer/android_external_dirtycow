@@ -25,3 +25,19 @@ LOCAL_CFLAGS += -DDEBUG
 LOCAL_SHARED_LIBRARIES := liblog
 LOCAL_SDK_VERSION := 21
 include $(BUILD_EXECUTABLE)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := recowvery-applypatch
+LOCAL_SRC_FILES := \
+	recowvery-applypatch.c
+LOCAL_CFLAGS += -DDEBUG
+LOCAL_SHARED_LIBRARIES := liblog
+include $(BUILD_EXECUTABLE)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := recowvery-app_process64
+LOCAL_SRC_FILES := \
+	recowvery-app_process64.c
+LOCAL_CFLAGS += -DDEBUG
+LOCAL_SHARED_LIBRARIES := liblog libcutils libselinux
+include $(BUILD_EXECUTABLE)
