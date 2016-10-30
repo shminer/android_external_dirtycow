@@ -16,18 +16,14 @@ Please add it to your `local_manifests` folder as `dirtycow.xml`:
 </manifest>
 ```
 
-build using:
+## Usage:
 
+### Building:
 ```sh
 lunch your_device-eng
 
 make -j5 dirtycow recowvery-applypatch recowvery-app_process64 recowvery-run-as
 ```
-
-## Usage:
-
-### Building:
-
 
 ### Running:
 ```sh
@@ -67,3 +63,9 @@ $ run-as su
 #
 "<play around in your somewhat limited root shell full of possibilities>"
 ```
+
+From your root shell, it's possible to use commands such as:
+```sh
+dd if=/sdcard/twrp.img of=/dev/block/bootdevice/by-name/recovery
+```
+If you have a [Team Win Recovery Project](https://twrp.me/) image on your internal storage, this is how you would install a custom recovery.
