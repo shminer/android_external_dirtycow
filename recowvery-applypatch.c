@@ -4,7 +4,7 @@
 #include <string.h>
 #include <errno.h>
 
-#define APP_NAME "recowvery-applypatch"
+#define APP_NAME "recowvery"
 
 /* this is where we need to work on the decompressed cpio */
 #define WORK_DIR      "/cache"
@@ -130,7 +130,7 @@ int main(void)
 {
 	int ret = 0;
 
-	LOGV("Welcome to %s!", APP_NAME);
+	LOGV("Welcome to %s! (%s)", APP_NAME, "applypatch");
 
 	ret = flash_permissive_boot();
 	if (ret)

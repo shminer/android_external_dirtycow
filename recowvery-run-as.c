@@ -5,7 +5,7 @@
 #include <errno.h>
 #include <sys/capability.h>
 
-#define APP_NAME "recowvery-run-as"
+#define APP_NAME "recowvery"
 
 /* this is where we need to work on the decompressed cpio */
 #define WORK_DIR      "/cache"
@@ -141,7 +141,7 @@ int main(int argc, char **argv)
 	int uid, i, argc_exec;
 	char** argv_exec;
 
-	LOGV("Welcome to %s!", APP_NAME);
+	LOGV("Welcome to %s! (%s)", APP_NAME, "run-as");
 
 	if (argc < 2)
 		goto uid;
@@ -249,7 +249,7 @@ flash:
 
 	return 0;
 usage:
-	LOGE("Usage for %s:", APP_NAME);
+	LOGE("Usage for %s (%s):", argv[0], APP_NAME);
 	LOGE("  Execute a command as root:");
 	LOGE("    %s exec command [args...]", argv[0]);
 	LOGE("  Start a root shell:");

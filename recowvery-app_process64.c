@@ -5,7 +5,7 @@
 #include <cutils/properties.h>
 #include <selinux/selinux.h>
 
-#define APP_NAME "recowvery-app_process64"
+#define APP_NAME "recowvery"
 
 #ifdef DEBUG
 #include <android/log.h>
@@ -23,7 +23,7 @@ int main(void)
 	int ret = 1;
 	char* conn = NULL;
 
-	LOGV("Welcome to %s!", APP_NAME);
+	LOGV("Welcome to %s! (%s)", APP_NAME, "app_process64");
 	LOGV("------------");
 
 	ret = getcon(&conn);
