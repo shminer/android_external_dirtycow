@@ -23,9 +23,8 @@ int main(void)
 	int ret = 1;
 	char* conn = NULL;
 
-	LOGV("***********************************************");
-	LOGV("*   wotzit doing this ain't no app_process64  *");
-	LOGV("***********************************************");
+	LOGV("Welcome to %s!", APP_NAME);
+	LOGV("------------");
 
 	ret = getcon(&conn);
 	if (ret) {
@@ -66,8 +65,9 @@ int main(void)
 		goto nope;
 	}
 
+	LOGV("------------");
 	LOGV("Recovery flash script should have started!");
-	LOGV("Run on your PC to see progress: adb logcat | grep cow");
+	LOGV("Run on your PC to see progress: adb logcat -s recowvery-applypatch");
 	/*
 	 * we should wait 2 minutes to allow the flash to complete
 	 */
