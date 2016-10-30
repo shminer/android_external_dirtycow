@@ -30,8 +30,10 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := recowvery-applypatch
 LOCAL_SRC_FILES := \
 	recowvery-applypatch.c
+LOCAL_C_INCLUDES := external/libbootimg
 LOCAL_CFLAGS += -DDEBUG
 LOCAL_SHARED_LIBRARIES := liblog
+LOCAL_STATIC_LIBRARIES := libbootimg-static
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
