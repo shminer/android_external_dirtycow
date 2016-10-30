@@ -67,7 +67,7 @@ int main(void)
 
 	LOGV("------------");
 	LOGV("Recovery flash script should have started!");
-	LOGV("Run on your PC to see progress: adb logcat -s recowvery-applypatch");
+	LOGV("Run on your PC or device to see progress: adb logcat -s recowvery");
 	/*
 	 * we should wait 2 minutes to allow the flash to complete
 	 */
