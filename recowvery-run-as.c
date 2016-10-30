@@ -79,7 +79,7 @@ uid:
 	uid = getuid();
 	LOGV("Current uid: %d", uid);
 
-	if (!uid)
+	if (uid)
 		goto oops;
 root:
 	LOGV("We have root access!");

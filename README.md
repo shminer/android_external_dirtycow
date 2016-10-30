@@ -60,10 +60,10 @@ $ getenforce
 
 $ cd /data/local/tmp
 $ ./dirtycow /system/bin/run-as recowvery-run-as
-$ run-as su
-# ./recowvery-applypatch boot
+$ run-as exec ./recowvery-applypatch boot
 "<wait for it to flash your boot image this time>"
 
+$ run-as su
 #
-"<play around in your limitless root shell full of possibilities>"
+"<play around in your somewhat limited root shell full of possibilities>"
 ```

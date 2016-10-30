@@ -22,9 +22,6 @@
 
 #define MiB 1048576
 
-/* this is where we need to work on the decompressed cpio */
-#define WORK_DIR      "/cache"
-
 /* msm8996 */
 #define BLOCK_BOOT     "/dev/block/bootdevice/by-name/boot"
 #define BLOCK_RECOVERY "/dev/block/bootdevice/by-name/recovery"
@@ -255,14 +252,17 @@ static int flash_permissive_boot(int to_boot)
 	int ret = 0;
 	uint32_t sz;
 	boot_img image;
-	const char *ramdisk = WORK_DIR "/ramdisk.gz";
-	const char *cpio = WORK_DIR "/ramdisk.cpio";
-	const char *flash_block;
+	const char *ramdisk, *cpio, *flash_block;
 
-	if (to_boot)
+	if (to_boot) {
 		flash_block = BLOCK_BOOT;
-	else
+		ramdisk = "/data/local/ramdisk.gz";
+		cpio = "/data/local/ramdisk.cpio";
+	} else {
 		flash_block = BLOCK_RECOVERY;
+		ramdisk = "/cache/ramdisk.gz";
+		cpio = "/cache/ramdisk.cpio";
+	}
 
 	LOGV("------------");
 /* start read boot image */
