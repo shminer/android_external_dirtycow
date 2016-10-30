@@ -18,15 +18,6 @@ LOCAL_SDK_VERSION := 21
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := cow-exec
-LOCAL_SRC_FILES := \
-	cow-exec.c
-LOCAL_CFLAGS += -DDEBUG
-LOCAL_SHARED_LIBRARIES := liblog
-LOCAL_SDK_VERSION := 21
-include $(BUILD_EXECUTABLE)
-
-include $(CLEAR_VARS)
 LOCAL_MODULE := recowvery-applypatch
 LOCAL_SRC_FILES := \
 	recowvery-applypatch.c
@@ -49,7 +40,7 @@ LOCAL_MODULE := recowvery-run-as
 LOCAL_SRC_FILES := \
 	recowvery-run-as.c
 LOCAL_C_INCLUDES := external/libbootimg
-LOCAL_CFLAGS += -DDEBUG
-LOCAL_SHARED_LIBRARIES := liblog
+#LOCAL_CFLAGS += -DDEBUG
+#LOCAL_SHARED_LIBRARIES := liblog
 LOCAL_STATIC_LIBRARIES := libbootimg-static
 include $(BUILD_EXECUTABLE)
