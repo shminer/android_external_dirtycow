@@ -360,6 +360,8 @@ static int flash_permissive_boot(const int to_boot)
 /* end cmdline set */
 	SEP;
 /* start flash boot image */
+	LOGV("Updating boot image hash");
+	bootimg_update_hash(&image);
 
 	LOGV("Writing modified boot image to block device '%s'...", flash_block);
 	ret = write_boot_image(&image, flash_block);
