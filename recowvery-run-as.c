@@ -4,6 +4,8 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/capability.h>
+#include <sys/prctl.h>
+#include <selinux/selinux.h>
 
 #define APP_NAME "recowvery"
 
@@ -22,6 +24,15 @@ enum {
 	DO_SU
 };
 
+static const char* context_init = "u:r:init:s0";
+
+static void capadd(struct __user_cap_data_struct *capdata, int cap)
+{
+	capdata[CAP_TO_INDEX(cap)].effective   |= CAP_TO_MASK(cap);
+	capdata[CAP_TO_INDEX(cap)].permitted   |= CAP_TO_MASK(cap);
+	capdata[CAP_TO_INDEX(cap)].inheritable |= CAP_TO_MASK(cap);
+}
+
 int main(int argc, char **argv)
 {
 	int ret = 0;
@@ -39,6 +50,7 @@ int main(int argc, char **argv)
 	if (!strcmp(argv[1], "exec")) {
 		if (argc == 2) {
 			LOGV("Not enough parameters for exec!");
+			ret = EINVAL;
 			goto usage;
 		}
 		run = DO_EXEC;
@@ -47,6 +59,7 @@ int main(int argc, char **argv)
 		run = DO_SU;
 	} else {
 		LOGV("Unknown parameter: %s", argv[1]);
+		ret = EINVAL;
 		goto usage;
 	}
 uid:
@@ -61,19 +74,28 @@ uid:
 	memset(&capheader, 0, sizeof(capheader));
 	memset(&capdata, 0, sizeof(capdata));
 	capheader.version = _LINUX_CAPABILITY_VERSION_3;
-	capdata[CAP_TO_INDEX(CAP_SETUID)].effective |= CAP_TO_MASK(CAP_SETUID);
-	capdata[CAP_TO_INDEX(CAP_SETGID)].effective |= CAP_TO_MASK(CAP_SETGID);
-	capdata[CAP_TO_INDEX(CAP_SETUID)].permitted |= CAP_TO_MASK(CAP_SETUID);
-	capdata[CAP_TO_INDEX(CAP_SETGID)].permitted |= CAP_TO_MASK(CAP_SETGID);
+	capadd(capdata, CAP_SETGID);
+	capadd(capdata, CAP_SETUID);
 
 	LOGV("Setting capabilities");
-	if (capset(&capheader, &capdata[0]) < 0) {
-		LOGE("Could not set capabilities: %s", strerror(errno));
+	if (capset(&capheader, &capdata[0])) {
+		ret = errno;
+		LOGE("Could not set capabilities");
+		goto oops;
 	}
 
 	LOGV("Attempting to escalate to root");
-	if (setresgid(0, 0, 0) || setresuid(0, 0, 0)) {
-		LOGE("setresgid/setresuid failed");
+
+	if (setresgid(0, 0, 0)) {
+		ret = errno;
+		LOGE("setresgid failed");
+		goto oops;
+	}
+
+	if (setresuid(0, 0, 0)) {
+		ret = errno;
+		LOGE("setresuid failed");
+		goto oops;
 	}
 
 	uid = getuid();
@@ -81,8 +103,19 @@ uid:
 
 	if (uid)
 		goto oops;
+
+	// less audits
+	if (setcon(context_init))
+		LOGE("setcon transition to '%s' failed (is SELinux Enforcing?)", context_init);
+
 root:
 	LOGV("We have root access!");
+
+	if (prctl(PR_SET_KEEPCAPS, 1)) {
+		ret = errno;
+		LOGE("Could not set retain capabilities");
+		goto oops;
+	}
 
 	if (run == DO_EXEC)
 		goto exec;
@@ -108,7 +141,7 @@ exec:
 
 	// if we get this far, then execvp failed!
 	free(argv_exec);
-	ret = 1;
+	ret = EPERM;
 	goto oops;
 su:
 	LOGV("------------");
@@ -121,7 +154,7 @@ su:
 	execve("/system/bin/sh", argv_exec, 0);
 
 	// if we get this far, then execve failed!
-	ret = 1;
+	ret = EPERM;
 	goto oops;
 usage:
 	LOGE("Usage for %s (%s):", argv[0], APP_NAME);
@@ -131,6 +164,6 @@ usage:
 	LOGE("    %s su", argv[0]);
 	return EINVAL;
 oops:
-	LOGE("Failed! Exiting...");
+	LOGE("Failed! Exiting... (%s)", strerror(ret));
 	return ret;
 }
