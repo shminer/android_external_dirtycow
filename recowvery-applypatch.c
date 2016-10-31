@@ -7,20 +7,30 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#define APP_NAME "recowvery"
+#define APP_NAME  "recowvery"
+#define HOST_NAME "applypatch"
 
 #ifdef DEBUG
 #include <android/log.h>
-#define LOGV(...) { __android_log_print(ANDROID_LOG_INFO, APP_NAME, __VA_ARGS__); printf(__VA_ARGS__); printf("\n"); }
+#define LOGV(...) { __android_log_print(ANDROID_LOG_INFO,  APP_NAME, __VA_ARGS__); printf(__VA_ARGS__); printf("\n"); }
 #define LOGE(...) { __android_log_print(ANDROID_LOG_ERROR, APP_NAME, __VA_ARGS__); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); }
 #else
 #define LOGV(...) { printf(__VA_ARGS__); printf("\n"); }
 #define LOGE(...) { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); }
 #endif
 
+#define SEP LOGV("------------")
+
 #include "bootimg.h"
 
 #define MiB 1048576
+
+/* directories to store content for working on
+ * /data/local is r/w accessible by limited capabilities root
+ * /cache is r/w accessible by u:r:install_recovery:s0 context as full capabilities root
+ */
+#define WORK_BOOT      "/data/local"
+#define WORK_RECOVERY  "/cache"
 
 /* msm8996 */
 #define BLOCK_BOOT     "/dev/block/bootdevice/by-name/boot"
@@ -31,8 +41,8 @@
 //#define BLOCK_RECOVERY "/dev/block/platform/155a0000.ufs/by-name/RECOVERY"
 
 /* name of the init file we're going to overwrite */
-static const char *init_rc = "init.lge.fm.rc";
-static const char *init_rc_content =
+static const char init_rc[] = "init.lge.fm.rc";
+static const char init_rc_content[] =
 /* this is the content of our new init file */
 "on boot\n"
 "    setprop ro.fm.module BCM\n"
@@ -44,7 +54,7 @@ static const char *init_rc_content =
 "    write /sys/fs/selinux/enforce 0\n";
 /* end of init file content */
 
-static int write_binary_to_file(const char* file, const byte* binary, uint32_t size)
+static int write_binary_to_file(const char* file, const byte* binary, const off_t size)
 {
 	int fd = open(file, O_CREAT | O_TRUNC | O_WRONLY, 0666);
 
@@ -53,10 +63,10 @@ static int write_binary_to_file(const char* file, const byte* binary, uint32_t s
 
 	LOGV("Writing to file '%s'...", file);
 
-	if (size > 0 && write(fd, binary, size) != size)
+	if (size && write(fd, binary, size) != size)
 		goto oops;
 
-	LOGV("Wrote OK: %lu bytes", (unsigned long)size);
+	LOGV("Wrote OK: %zu bytes", size);
 
 	close(fd);
 	return 0;
@@ -65,11 +75,33 @@ oops:
 	return EACCES;
 }
 
-static byte *cpio_file(const char *file, const byte *content, uint32_t content_len, uint32_t *cpio_len)
+static off_t seek_last_null(const int fd, const int reverse)
+{
+	char c[1];
+	if (reverse)
+		lseek(fd, -1, SEEK_CUR);
+	while (read(fd, c, 1) > 0) {
+		if (*c)
+			return lseek(fd, reverse ? 1 : -1, SEEK_CUR); // go back to the last null
+		if (reverse)
+			lseek(fd, -2, SEEK_CUR);
+	}
+	return lseek(fd, 0, SEEK_CUR);
+}
+
+/* start cpio code */
+
+#define CPIO_MAGIC "070701"
+#define CPIO_TRAILER_MAGIC "TRAILER!!!"
+#define CPIO_TRAILER_INNER "00000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000B00000000"
+
+static const byte cpio_trailer[] = CPIO_MAGIC CPIO_TRAILER_INNER CPIO_TRAILER_MAGIC;
+
+static byte *cpio_file(const char *file, const byte *content, const off_t content_len, off_t *cpio_len)
 {
 	struct stat st = {0};
-	uint32_t sz = 0;
-	uint32_t flen = strlen(file);
+	off_t sz = 0;
+	const int flen = strlen(file) + 1; // null terminator
 	byte *cpio, *c;
 
 	st.st_mode |= S_IFREG; // is a file
@@ -79,14 +111,14 @@ static byte *cpio_file(const char *file, const byte *content, uint32_t content_l
 	st.st_size = content_len;
 
 	// calculate length of the new cpio file
-	*cpio_len = 110 + flen + 4 + content_len + 3;
+	*cpio_len = 110 + flen + 3 + content_len + 3;
 
 	// allocate full memory needed to store cpio file
 	c = cpio = malloc(*cpio_len);
 
 	// write cpio header, content size, filename all in one go
 	c += sprintf((char*)c,
-		"070701"
+		CPIO_MAGIC
 		"%08X%08X%08X%08X%08X%08X"
 		"%08X%08X%08X%08X%08X%08X"
 		"00000000%s",
@@ -101,9 +133,9 @@ static byte *cpio_file(const char *file, const byte *content, uint32_t content_l
 		(uint32_t)minor(st.st_dev),
 		(uint32_t)major(st.st_rdev),
 		(uint32_t)minor(st.st_rdev),
-		flen + 1, file);
+		flen, file);
 
-	// add null padding
+	// add null padding (+1 for filename null terminator)
 	memset(c, 0, 4);
 	c += 4;
 
@@ -120,14 +152,11 @@ static byte *cpio_file(const char *file, const byte *content, uint32_t content_l
 	return cpio;
 }
 
-static const byte cpio_trailer[124] = "07070100000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000B00000000TRAILER!!!\0\0\0\0";
-
-static int cpio_append(const char *file, const byte *cpio, uint32_t cpio_len)
+static int cpio_append(const char *file, const byte *cpio, const off_t cpio_len)
 {
-	int ret = 0;
-	int fd, sz;
-	const char trailer[10] = "TRAILER!!!";
-	char tmp[sizeof(trailer)];
+	int fd, ret = 0;
+	off_t sz;
+	byte tmp[] = CPIO_TRAILER_MAGIC;
 
 	fd = open(file, O_RDWR);
 	if (fd < 0) {
@@ -139,34 +168,39 @@ static int cpio_append(const char *file, const byte *cpio, uint32_t cpio_len)
 	if (sz < 0)
 		goto oops;
 
-	LOGV("Opened cpio archive '%s' (%lu bytes)", file, (unsigned long)sz);
+	LOGV("Opened cpio archive '%s' (%zu bytes)", file, sz);
 
-	// search for cpio trailer
-	lseek(fd, -4 - sizeof(trailer), SEEK_CUR);
-	read(fd, tmp, sizeof(trailer));
-	if (memcmp(trailer, tmp, sizeof(tmp))) {
-		lseek(fd, 0, SEEK_END);
-		goto append; // no valid trailer, append to the end anyway
+	sz = seek_last_null(fd, 1);
+	// search for cpio trailer magic
+	lseek(fd, -sizeof(tmp), SEEK_CUR);
+	read(fd, tmp, sizeof(tmp));
+	if (memcmp(CPIO_TRAILER_MAGIC, tmp, sizeof(tmp))) {
+		lseek(fd, sz, SEEK_SET); // didn't find trailer magic, go back to first null
+		goto append;
 	}
-
 	// seek to the start of trailer
-	lseek(fd, -sizeof(cpio_trailer), SEEK_END);
-
+	lseek(fd, -sizeof(cpio_trailer), SEEK_CUR);
 append:
 	if (write(fd, cpio, cpio_len) != cpio_len) {
 		ret = EIO;
 		goto trailer;
 	}
 
-	LOGV("Wrote new file (%lu bytes) to cpio archive,", (unsigned long)cpio_len);
+	LOGV("Wrote new file (%zu bytes) to cpio archive,", cpio_len);
 trailer:
 	if (write(fd, cpio_trailer, sizeof(cpio_trailer)) != sizeof(cpio_trailer)) {
 		ret = EIO;
 		goto oops;
 	}
 
-	sz = lseek(fd, 0, SEEK_END);
-	LOGV("Final size: %lu bytes", (unsigned long)sz);
+	// final 3 byte null padding
+	write(fd, "\0\0\0", 3);
+
+	sz = lseek(fd, 0, SEEK_CUR);
+	// make sure there's no trailing garbage
+	ftruncate(fd, sz);
+
+	LOGV("Final size: %zu bytes", sz);
 oops:
 	if (fd >= 0)
 		close(fd);
@@ -174,21 +208,23 @@ oops:
 	return ret;
 }
 
-static int valid_filesize(const char *file, unsigned long size)
+/* end cpio code */
+
+static int valid_filesize(const char *file, const off_t size)
 {
 	int fd;
-	unsigned long sz;
+	off_t sz;
 
-	LOGV("Checking '%s' for validity (size >= %lu bytes)", file, size);
+	LOGV("Checking '%s' for validity (size >= %zu bytes)", file, size);
 	fd = open(file, O_RDONLY);
 	if (fd < 0) {
 		LOGE("Couldn't open file for reading!");
 		return ENOENT;
 	}
 	sz = lseek(fd, 0, SEEK_END);
-	LOGV("'%s': %lu bytes", file, sz);
+	LOGV("'%s': %zu bytes", file, sz);
 	if (sz < size) {
-		LOGE("File is not at least %lu bytes, must not be valid", size);
+		LOGE("File is not at least %zu bytes, must not be valid", size);
 		close(fd);
 		return EINVAL;
 	}
@@ -247,24 +283,24 @@ oops:
 	return ret;
 }
 
-static int flash_permissive_boot(int to_boot)
+static int flash_permissive_boot(const int to_boot)
 {
 	int ret = 0;
-	uint32_t sz;
+	off_t sz;
 	boot_img image;
 	const char *ramdisk, *cpio, *flash_block;
 
 	if (to_boot) {
 		flash_block = BLOCK_BOOT;
-		ramdisk = "/data/local/ramdisk.gz";
-		cpio = "/data/local/ramdisk.cpio";
+		ramdisk = WORK_BOOT "/ramdisk.gz";
+		cpio = WORK_BOOT "/ramdisk.cpio";
 	} else {
 		flash_block = BLOCK_RECOVERY;
-		ramdisk = "/cache/ramdisk.gz";
-		cpio = "/cache/ramdisk.cpio";
+		ramdisk = WORK_RECOVERY "/ramdisk.gz";
+		cpio = WORK_RECOVERY "/ramdisk.cpio";
 	}
 
-	LOGV("------------");
+	SEP;
 /* start read boot image */
 
 	LOGV("Loading boot image from block device '%s'...", BLOCK_BOOT);
@@ -276,7 +312,7 @@ static int flash_permissive_boot(int to_boot)
 	LOGV("Loaded boot image!");
 
 /* end read boot image */
-	LOGV("------------");
+	SEP;
 /* start ramdisk modification */
 
 	LOGV("Saving old ramdisk to file");
@@ -288,7 +324,7 @@ static int flash_permissive_boot(int to_boot)
 	if (ret)
 		goto oops;
 
-	LOGV("------------");
+	SEP;
 /* start add modified init.lge.fm.rc to ramdisk cpio */
 
 	byte* cpiodata = cpio_file(init_rc, (byte*)init_rc_content, strlen(init_rc_content), &sz);
@@ -300,7 +336,7 @@ static int flash_permissive_boot(int to_boot)
 	}
 
 /* end add modified init.lge.fm.rc to ramdisk cpio */
-	LOGV("------------");
+	SEP;
 
 	ret = compress_ramdisk(cpio, ramdisk);
 	if (ret)
@@ -312,7 +348,7 @@ static int flash_permissive_boot(int to_boot)
 		goto oops;
 
 /* end ramdisk modification */
-	LOGV("------------");
+	SEP;
 /* start cmdline set */
 
 	LOGV("cmdline: \"%s\"", image.hdr.cmdline);
@@ -322,7 +358,7 @@ static int flash_permissive_boot(int to_boot)
 	LOGV("cmdline: \"%s\"", image.hdr.cmdline);
 
 /* end cmdline set */
-	LOGV("------------");
+	SEP;
 /* start flash boot image */
 
 	LOGV("Writing modified boot image to block device '%s'...", flash_block);
@@ -334,7 +370,7 @@ static int flash_permissive_boot(int to_boot)
 	LOGV("Done!");
 
 /* end flash boot image */
-	LOGV("------------");
+	SEP;
 
 	LOGV("Permissive boot has been has been flashed to %s successfully!", flash_block)
 	LOGV("You may use '%s' now to enter a permissive system.",
@@ -354,7 +390,7 @@ int main(int argc, char **argv)
 {
 	int ret = 0;
 
-	LOGV("Welcome to %s! (%s)", APP_NAME, "applypatch");
+	LOGV("Welcome to %s! (%s)", APP_NAME, HOST_NAME);
 
 	if (argc > 1 && !strcmp(argv[1], "boot"))
 		ret = flash_permissive_boot(1);
@@ -365,6 +401,7 @@ int main(int argc, char **argv)
 
 	return 0;
 oops:
-	LOGE("Failed! Exiting...");
+	LOGE("Error %d: %s", ret, strerror(ret));
+	LOGE("Exiting...");
 	return ret;
 }

@@ -5,67 +5,71 @@
 #include <cutils/properties.h>
 #include <selinux/selinux.h>
 
-#define APP_NAME "recowvery"
+#define APP_NAME  "recowvery"
+#define HOST_NAME "app_process64"
 
 #ifdef DEBUG
 #include <android/log.h>
-#define LOGV(...) { __android_log_print(ANDROID_LOG_INFO, APP_NAME, __VA_ARGS__); printf(__VA_ARGS__); printf("\n"); fflush(stdout); }
+#define LOGV(...) { __android_log_print(ANDROID_LOG_INFO,  APP_NAME, __VA_ARGS__); printf(__VA_ARGS__); printf("\n"); }
+#define LOGE(...) { __android_log_print(ANDROID_LOG_ERROR, APP_NAME, __VA_ARGS__); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); }
 #else
-#define LOGV(...) { printf(__VA_ARGS__); printf("\n"); fflush(stdout); }
+#define LOGV(...) { printf(__VA_ARGS__); printf("\n"); }
+#define LOGE(...) { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); }
 #endif
 
-const char* CONTEXT_SYS = "u:r:system_server:s0";
-const char* PROP_KEY = "ctl.start";
-const char* PROP_VAL = "flash_recovery";
+#define SEP LOGV("------------")
+
+#define CONTEXT_SYS "u:r:system_server:s0"
+#define PROP_KEY    "ctl.start"
+#define PROP_VAL    "flash_recovery"
 
 int main(void)
 {
-	int ret = 1;
-	char* conn = NULL;
+	int ret = 0;
+	char *conn = 0;
 
-	LOGV("Welcome to %s! (%s)", APP_NAME, "app_process64");
-	LOGV("------------");
+	LOGV("Welcome to %s! (%s)", APP_NAME, HOST_NAME);
+	SEP;
 
 	ret = getcon(&conn);
 	if (ret) {
-		LOGV("Could not get current security context (ret = %d)!", ret);
-		goto nope;
+		LOGE("Could not get current security context!");
+		goto oops;
 	}
 
 	LOGV("Current selinux context: %s", conn);
 
 	ret = setcon(CONTEXT_SYS);
 	if (ret) {
-		LOGV("Unable to set security context to '%s' (ret = %d)!",
-			CONTEXT_SYS, ret);
-		goto nope;
+		LOGE("Unable to set security context to '%s'!", CONTEXT_SYS);
+		goto oops;
 	}
-	LOGV("Set context to '%s'!", CONTEXT_SYS);
+	LOGV("Set context to '%s'", CONTEXT_SYS);
 
 	ret = getcon(&conn);
 	if (ret) {
-		LOGV("Could not get current security context (ret = %d)!", ret);
-		goto nope;
-	}
-
-	if (strcmp(conn, CONTEXT_SYS) != 0) {
-		LOGV("Current security context '%s' does not match '%s'!",
-			conn, CONTEXT_SYS);
-		ret = EINVAL;
-		goto nope;
+		LOGE("Could not get current security context!");
+		goto oops;
 	}
 
 	LOGV("Current security context: %s", conn);
+
+	if (!strcmp(conn, CONTEXT_SYS)) {
+		LOGE("Current security context '%s' does not match '%s'!",
+			conn, CONTEXT_SYS);
+		ret = EINVAL;
+		goto oops;
+	}
 
 	LOGV("Setting property '%s' to '%s'", PROP_KEY, PROP_VAL);
 
 	ret = property_set(PROP_KEY, PROP_VAL);
 	if (ret) {
-		LOGV("Failed to set property '%s' (ret = %d)!", PROP_KEY, ret);
-		goto nope;
+		LOGE("Failed to set property '%s'!", PROP_KEY);
+		goto oops;
 	}
 
-	LOGV("------------");
+	SEP;
 	LOGV("Recovery flash script should have started!");
 	LOGV("Run on your PC or device to see progress: adb logcat -s recowvery");
 	/*
@@ -74,12 +78,13 @@ int main(void)
 	LOGV("Waiting 120 seconds...");
 	sleep(120);
 	return 0;
-nope:
+oops:
 	/*
 	 * we should wait 20 seconds just so Zygote isn't
 	 * being constantly restarted
 	 */
-	LOGV("Waiting 20 seconds for next try...");
+	LOGE("Error %d: %s", ret, strerror(ret));
+	LOGE("Waiting 20 seconds for next try...");
 	sleep(20);
 	return ret;
 }

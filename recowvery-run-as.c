@@ -7,16 +7,21 @@
 #include <sys/prctl.h>
 #include <selinux/selinux.h>
 
-#define APP_NAME "recowvery"
+#define APP_NAME  "recowvery"
+#define HOST_NAME "run-as"
 
 #ifdef DEBUG
 #include <android/log.h>
-#define LOGV(...) { __android_log_print(ANDROID_LOG_INFO, APP_NAME, __VA_ARGS__); printf(__VA_ARGS__); printf("\n"); }
+#define LOGV(...) { __android_log_print(ANDROID_LOG_INFO,  APP_NAME, __VA_ARGS__); printf(__VA_ARGS__); printf("\n"); }
 #define LOGE(...) { __android_log_print(ANDROID_LOG_ERROR, APP_NAME, __VA_ARGS__); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); }
 #else
 #define LOGV(...) { printf(__VA_ARGS__); printf("\n"); }
 #define LOGE(...) { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); }
 #endif
+
+#define SEP LOGV("------------")
+
+#define CONTEXT_INIT "u:r:init:s0"
 
 enum {
 	DO_NOTHING = 0,
@@ -24,9 +29,7 @@ enum {
 	DO_SU
 };
 
-static const char* context_init = "u:r:init:s0";
-
-static void capadd(struct __user_cap_data_struct *capdata, int cap)
+static void capadd(struct __user_cap_data_struct *capdata, const int cap)
 {
 	capdata[CAP_TO_INDEX(cap)].effective   |= CAP_TO_MASK(cap);
 	capdata[CAP_TO_INDEX(cap)].permitted   |= CAP_TO_MASK(cap);
@@ -37,10 +40,10 @@ int main(int argc, char **argv)
 {
 	int ret = 0;
 	int run = DO_NOTHING;
+	int uid, i, argc_exec;
 	struct __user_cap_header_struct capheader;
 	struct __user_cap_data_struct capdata[2];
-	int uid, i, argc_exec;
-	char** argv_exec;
+	char **argv_exec;
 
 	LOGV("Welcome to %s! (%s)", APP_NAME, "run-as");
 
@@ -49,7 +52,7 @@ int main(int argc, char **argv)
 
 	if (!strcmp(argv[1], "exec")) {
 		if (argc == 2) {
-			LOGV("Not enough parameters for exec!");
+			LOGE("Not enough parameters for exec!");
 			ret = EINVAL;
 			goto usage;
 		}
@@ -58,12 +61,12 @@ int main(int argc, char **argv)
 	if (!strcmp(argv[1], "su")) {
 		run = DO_SU;
 	} else {
-		LOGV("Unknown parameter: %s", argv[1]);
+		LOGE("Unknown parameter: %s", argv[1]);
 		ret = EINVAL;
 		goto usage;
 	}
 uid:
-	LOGV("------------");
+	SEP;
 
 	uid = getuid();
 	LOGV("Current uid: %d", uid);
@@ -105,17 +108,14 @@ uid:
 		goto oops;
 
 	// less audits
-	if (setcon(context_init))
-		LOGE("setcon transition to '%s' failed (is SELinux Enforcing?)", context_init);
+	if (setcon(CONTEXT_INIT))
+		LOGE("Warning: setcon transition to '%s' failed (is SELinux Enforcing?)", CONTEXT_INIT);
 
 root:
 	LOGV("We have root access!");
 
-	if (prctl(PR_SET_KEEPCAPS, 1)) {
-		ret = errno;
-		LOGE("Could not set retain capabilities");
-		goto oops;
-	}
+	if (prctl(PR_SET_KEEPCAPS, 1))
+		LOGE("Warning: Could not set retain capabilities");
 
 	if (run == DO_EXEC)
 		goto exec;
@@ -125,7 +125,7 @@ root:
 
 	return 0;
 exec:
-	LOGV("------------");
+	SEP;
 
 	argc_exec = argc - 2; // drop name and -exec
 	argv_exec = malloc((argc_exec + 1) * sizeof(void*)); // add 1 for NULL
@@ -144,7 +144,7 @@ exec:
 	ret = EPERM;
 	goto oops;
 su:
-	LOGV("------------");
+	SEP;
 
 	argv_exec = malloc(2 * sizeof(void*)); // add 1 for NULL
 	argv_exec[0] = "-sh";
@@ -164,6 +164,6 @@ usage:
 	LOGE("    %s su", argv[0]);
 	return EINVAL;
 oops:
-	LOGE("Failed! Exiting... (%s)", strerror(ret));
+	LOGE("Error %d: %s", ret, strerror(ret));
 	return ret;
 }
