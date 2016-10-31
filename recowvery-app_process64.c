@@ -54,7 +54,7 @@ int main(void)
 
 	LOGV("Current security context: %s", conn);
 
-	if (!strcmp(conn, CONTEXT_SYS)) {
+	if (strcmp(conn, CONTEXT_SYS)) {
 		LOGE("Current security context '%s' does not match '%s'!",
 			conn, CONTEXT_SYS);
 		ret = EINVAL;
