@@ -25,6 +25,8 @@
 
 #define MiB 1048576
 
+#define _FILE_OFFSET_BITS 64
+
 /* directories to store content for working on
  * /data/local is r/w accessible by limited capabilities root
  * /cache is r/w accessible by u:r:install_recovery:s0 context as full capabilities root
@@ -66,7 +68,7 @@ static int write_binary_to_file(const char* file, const byte* binary, const off_
 	if (size && write(fd, binary, size) != size)
 		goto oops;
 
-	LOGV("Wrote OK: %zu bytes", size);
+	LOGV("Wrote OK: %lld bytes", (long long)size);
 
 	close(fd);
 	return 0;
@@ -168,7 +170,7 @@ static int cpio_append(const char *file, const byte *cpio, const off_t cpio_len)
 	if (sz < 0)
 		goto oops;
 
-	LOGV("Opened cpio archive '%s' (%zu bytes)", file, sz);
+	LOGV("Opened cpio archive '%s' (%lld bytes)", file, (long long)sz);
 
 	sz = seek_last_null(fd, 1);
 	// search for cpio trailer magic
@@ -186,7 +188,7 @@ append:
 		goto trailer;
 	}
 
-	LOGV("Wrote new file (%zu bytes) to cpio archive,", cpio_len);
+	LOGV("Wrote new file (%lld bytes) to cpio archive,", (long long)cpio_len);
 trailer:
 	if (write(fd, cpio_trailer, sizeof(cpio_trailer)) != sizeof(cpio_trailer)) {
 		ret = EIO;
@@ -200,7 +202,7 @@ trailer:
 	// make sure there's no trailing garbage
 	ftruncate(fd, sz);
 
-	LOGV("Final size: %zu bytes", sz);
+	LOGV("Final size: %lld bytes", (long long)sz);
 oops:
 	if (fd >= 0)
 		close(fd);
@@ -215,16 +217,16 @@ static int valid_filesize(const char *file, const off_t size)
 	int fd;
 	off_t sz;
 
-	LOGV("Checking '%s' for validity (size >= %zu bytes)", file, size);
+	LOGV("Checking '%s' for validity (size >= %lld bytes)", file, (long long)size);
 	fd = open(file, O_RDONLY);
 	if (fd < 0) {
 		LOGE("Couldn't open file for reading!");
 		return ENOENT;
 	}
 	sz = lseek(fd, 0, SEEK_END);
-	LOGV("'%s': %zu bytes", file, sz);
+	LOGV("'%s': %lld bytes", file, (long long)sz);
 	if (sz < size) {
-		LOGE("File is not at least %zu bytes, must not be valid", size);
+		LOGE("File is not at least %lld bytes, must not be valid", (long long)size);
 		close(fd);
 		return EINVAL;
 	}
