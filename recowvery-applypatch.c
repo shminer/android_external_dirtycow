@@ -378,7 +378,7 @@ static int flash_permissive_boot(const int to_boot)
 
 	LOGV("Permissive boot has been has been flashed to %s successfully!", flash_block)
 	LOGV("You may use '%s' now to enter a permissive system.",
-		to_boot ? "reboot" : "reboot_recovery");
+		to_boot ? "reboot" : "reboot recovery");
 
 	LOGV("***********************************************");
 	LOGV("*       give jcadduono a hug, will ya?        *");
