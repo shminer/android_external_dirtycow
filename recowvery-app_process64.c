@@ -73,10 +73,11 @@ int main(void)
 	LOGV("Recovery flash script should have started!");
 	LOGV("Run on your PC or device to see progress: adb logcat -s recowvery");
 	/*
-	 * we should wait 2 minutes to allow the flash to complete
+	 * we should wait 3 minutes to allow the flash to complete
+	 * and for the user to reboot their device
 	 */
-	LOGV("Waiting 120 seconds...");
-	sleep(120);
+	LOGV("Waiting 3 minutes to try again (in case it didn't start or you forgot to dirtycow applypatch first)...");
+	sleep(180);
 	return 0;
 oops:
 	/*

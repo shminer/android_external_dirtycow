@@ -380,6 +380,11 @@ static int flash_permissive_boot(const int to_boot)
 	LOGV("You may use '%s' now to enter a permissive system.",
 		to_boot ? "reboot" : "reboot recovery");
 
+	if (!to_boot) {
+		SEP;
+		LOGV("Warning: If you don't reboot now, this will continue to run every 3 minutes!");
+	}
+
 	LOGV("***********************************************");
 	LOGV("*       give jcadduono a hug, will ya?        *");
 	LOGV("***********************************************");
