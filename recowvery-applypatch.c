@@ -56,27 +56,6 @@ static const char init_rc_content[] =
 "    write /sys/fs/selinux/enforce 0\n";
 /* end of init file content */
 
-static int write_binary_to_file(const char* file, const byte* binary, const off_t size)
-{
-	int fd = open(file, O_CREAT | O_TRUNC | O_WRONLY, 0666);
-
-	if (fd < 0)
-		goto oops;
-
-	LOGV("Writing to file '%s'...", file);
-
-	if (size && write(fd, binary, size) != size)
-		goto oops;
-
-	LOGV("Wrote OK: %lld bytes", (long long)size);
-
-	close(fd);
-	return 0;
-oops:
-	LOGE("Could not write file '%s'", file);
-	return EACCES;
-}
-
 static off_t seek_last_null(const int fd, const int reverse)
 {
 	char c[1];
@@ -289,7 +268,7 @@ static int flash_permissive_boot(const int to_boot)
 {
 	int ret = 0;
 	off_t sz;
-	boot_img image;
+	boot_img *image;
 	const char *ramdisk, *cpio, *flash_block;
 
 	if (to_boot) {
@@ -306,9 +285,10 @@ static int flash_permissive_boot(const int to_boot)
 /* start read boot image */
 
 	LOGV("Loading boot image from block device '%s'...", BLOCK_BOOT);
-	ret = load_boot_image(&image, BLOCK_BOOT);
-	if (ret) {
-		LOGE("Failed to load boot image: %s", strerror(ret));
+	image = load_boot_image(BLOCK_BOOT);
+	if (!image) {
+		LOGE("Failed to load boot image!");
+		ret = EINVAL;
 		goto oops;
 	}
 	LOGV("Loaded boot image!");
@@ -318,7 +298,7 @@ static int flash_permissive_boot(const int to_boot)
 /* start ramdisk modification */
 
 	LOGV("Saving old ramdisk to file");
-	ret = write_binary_to_file(ramdisk, image.ramdisk, image.hdr.ramdisk_size);
+	ret = bootimg_save_ramdisk(image, ramdisk);
 	if (ret)
 		goto oops;
 
@@ -345,7 +325,7 @@ static int flash_permissive_boot(const int to_boot)
 		goto oops;
 
 	LOGV("Loading new ramdisk into boot image");
-	ret = bootimg_load_ramdisk(&image, ramdisk);
+	ret = bootimg_load_ramdisk(image, ramdisk);
 	if (ret)
 		goto oops;
 
@@ -353,20 +333,20 @@ static int flash_permissive_boot(const int to_boot)
 	SEP;
 /* start cmdline set */
 
-	LOGV("cmdline: \"%s\"", image.hdr.cmdline);
+	LOGV("cmdline: \"%s\"", image->hdr.cmdline);
 	LOGV("Setting permissive arguments on cmdline");
-	bootimg_set_cmdline_arg(&image, "androidboot.selinux", "permissive");
-	bootimg_set_cmdline_arg(&image, "enforcing", "0");
-	LOGV("cmdline: \"%s\"", image.hdr.cmdline);
+	bootimg_set_cmdline_arg(image, "androidboot.selinux", "permissive");
+	bootimg_set_cmdline_arg(image, "enforcing", "0");
+	LOGV("cmdline: \"%s\"", image->hdr.cmdline);
 
 /* end cmdline set */
 	SEP;
 /* start flash boot image */
 	LOGV("Updating boot image hash");
-	bootimg_update_hash(&image);
+	bootimg_update_hash(image);
 
 	LOGV("Writing modified boot image to block device '%s'...", flash_block);
-	ret = write_boot_image(&image, flash_block);
+	ret = write_boot_image(image, flash_block);
 	if (ret) {
 		LOGE("Failed to write boot image: %s", strerror(ret));
 		goto oops;
@@ -391,7 +371,7 @@ static int flash_permissive_boot(const int to_boot)
 
 	ret = 0;
 oops:
-	free_boot_image(&image);
+	free_boot_image(image);
 	return ret;
 }
 
