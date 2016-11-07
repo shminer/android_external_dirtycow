@@ -22,10 +22,12 @@ Please add it to your `local_manifests` folder as `dirtycow.xml`:
 ```sh
 lunch your_device-eng
 
-make -j5 dirtycow recowvery-applypatch recowvery-app_process64 recowvery-run-as
+make -j5 dirtycow recowvery-applypatch recowvery-app_process recowvery-run-as
 ```
 
 ### Running:
+Note: Use `app_process32` on 32-bit targets.  
+
 ```sh
 adb push dirtycow /data/local/tmp
 adb push recowvery-applypatch /data/local/tmp

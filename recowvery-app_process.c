@@ -6,7 +6,11 @@
 #include <selinux/selinux.h>
 
 #define APP_NAME  "recowvery"
+#ifdef _64BIT
 #define HOST_NAME "app_process64"
+#else
+#define HOST_NAME "app_process32"
+#endif
 
 #ifdef DEBUG
 #include <android/log.h>
