@@ -298,7 +298,7 @@ static int flash_permissive_boot(const int to_boot)
 /* start ramdisk modification */
 
 	LOGV("Saving old ramdisk to file");
-	ret = bootimg_save_ramdisk(image, ramdisk);
+	ret = bootimg_save(image, BOOTIMG_RAMDISK, ramdisk);
 	if (ret)
 		goto oops;
 
@@ -325,7 +325,7 @@ static int flash_permissive_boot(const int to_boot)
 		goto oops;
 
 	LOGV("Loading new ramdisk into boot image");
-	ret = bootimg_load_ramdisk(image, ramdisk);
+	ret = bootimg_load(image, BOOTIMG_RAMDISK, ramdisk);
 	if (ret)
 		goto oops;
 
