@@ -28,12 +28,34 @@ LOCAL_STATIC_LIBRARIES := libbootimg-static
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE := recowvery-applyzero
+LOCAL_SRC_FILES := \
+	recowvery-applyzero.c
+LOCAL_C_INCLUDES := external/libbootimg
+LOCAL_CFLAGS += -DDEBUG -Os
+LOCAL_SHARED_LIBRARIES := liblog
+LOCAL_STATIC_LIBRARIES := libbootimg-static
+include $(BUILD_EXECUTABLE)
+
+include $(CLEAR_VARS)
 LOCAL_MODULE := recowvery-app_process
 LOCAL_MODULE_STEM_32 := recowvery-app_process32
 LOCAL_MODULE_STEM_64 := recowvery-app_process64
 LOCAL_MULTIBIT := true
 LOCAL_SRC_FILES := \
 	recowvery-app_process.c
+LOCAL_CFLAGS += -DDEBUG -Os
+LOCAL_CFLAGS_64 := -D_64BIT
+LOCAL_SHARED_LIBRARIES := liblog libcutils libselinux
+include $(BUILD_EXECUTABLE)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := recowvery-app_process2
+LOCAL_MODULE_STEM_32 := recowvery-app_process2_32
+LOCAL_MODULE_STEM_64 := recowvery-app_process2_64
+LOCAL_MULTIBIT := true
+LOCAL_SRC_FILES := \
+	recowvery-app_process2.c
 LOCAL_CFLAGS += -DDEBUG -Os
 LOCAL_CFLAGS_64 := -D_64BIT
 LOCAL_SHARED_LIBRARIES := liblog libcutils libselinux
